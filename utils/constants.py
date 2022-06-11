@@ -1,0 +1,4 @@
+PLAYER_ON_BASE = 1
+PLAYER_ON_FLY = 2
+
+
