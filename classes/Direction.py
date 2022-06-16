@@ -17,13 +17,13 @@ class Direction:
         self.init_template()
 
     def init_template(self):
-        self.template_dir = 272
+        self.template_dir = 0
         self.template_masked = cv2.cvtColor(cv2.imread(
-            f"{PRJ_PATH}/templates/arrow_direction/template-272.png"), cv2.COLOR_BGR2RGB)
+            f"{PRJ_PATH}/templates/arrow_direction/template-0.png"), cv2.COLOR_BGR2RGB)
 
         self.template_h, self.template_w, _ = self.template_masked.shape
 
-    def get_angle(self, image_rgb, cropped=False):
+    def get_ship_angle(self, image_rgb, cropped=False):
         # Find arrow frame
         if not cropped:
             image_rgb = image_rgb[110:128, -118:-100]
@@ -31,6 +31,9 @@ class Direction:
         image_rgb = cv2.resize(image_rgb, (self.template_h, self.template_w))
         image_masked = hsv_matcher.add_hsv_mask(image_rgb)
         # image_masked_rgb = cv2.cvtColor(image_masked, cv2.COLOR_GRAY2RGB)
+        # cv2.imshow("image_masked", image_masked)
+        # cv2.imshow("self.template_masked", self.template_masked)
+        # cv2.waitKey(0)
 
         result = hsv_matcher.modified_match_template(image_masked, self.template_masked,
                                                      method="TM_CCOEFF_NORMED",
@@ -40,14 +43,15 @@ class Direction:
                                                      rm_redundant=True, minmax=True)
 
         if len(result):
-            result[0][1] = (result[0][1] + self.template_dir) % 360
+            result[0][1] = (360 - result[0][1] + self.template_dir) % 360
             return result[0][1], result[0][3]
+
+        return -1, -1
 
     def run_test(self):
         dirname = f"{PRJ_PATH}/tests/compass_arrow"
         image_filenames = os.listdir(dirname)
         image_filenames = image_filenames[:]
-        print(image_filenames)
 
         img_rgb = [cv2.imread(f"{dirname}/{file_name}")[:, :, ::-1] for file_name in image_filenames]
 
@@ -57,9 +61,11 @@ class Direction:
         errors, no_pred = 0, 0
 
         for idx, image in enumerate(img_rgb):
-            res = self.get_angle(image, cropped=True)
+            res = self.get_ship_angle(image, cropped=True)
 
-            actual_degree = int(image_filenames[idx].split("_")[0]) % 355
+            actual_degree = int(image_filenames[idx].split("_")[0]) % 360
+            # TODO: test files has reverse order and start point
+            actual_degree = (360 - actual_degree + 90) % 360
             pred_degree = res[0]
 
             degree_diff = abs(actual_degree - pred_degree)
@@ -81,15 +87,32 @@ class Direction:
         cv2.imshow("template", self.template_masked)
         cv2.waitKey(0)
 
+    def save_template(self, image_rgb, filename="empty_name.png", cropped=False):
+        dirpath = f"{PRJ_PATH}/templates/arrow_direction"
+
+        if not cropped:
+            image_rgb = image_rgb[110:128, -118:-100]
+
+        image_masked = hsv_matcher.add_hsv_mask(image_rgb)
+        image_masked = cv2.resize(image_masked, (self.template_h, self.template_w))
+
+        cv2.imshow(f"filename", image_masked)
+
+        if cv2.waitKey(1) & 0xFF == ord("s"):
+            print(f"saving image to {dirpath}")
+            cv2.imwrite(f"{dirpath}/{filename}", image_masked)
+
 
 if __name__ == "__main__":
-    # window = wnd.init_window("Sky2Fly")
+    window = wnd.init_window("Sky2Fly")
     direction = Direction()
-    direction.run_test()
+    # direction.run_test()
 
-    # while True:
-    #     frame = wnd.read_window_frame(window, grayscale=False)
-    #     print(direction.get_angle(frame))
-    #
-    #     if cv2.waitKey(50) & 0xFF == 27:
-    #         break
+    while True:
+        frame = wnd.read_window_frame(window, grayscale=False)
+        # direction.save_template(frame, "template-0.png")
+
+        print(direction.get_ship_angle(frame))
+
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
