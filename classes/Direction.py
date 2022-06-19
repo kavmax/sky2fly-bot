@@ -52,7 +52,7 @@ class Direction:
         return int(np.rad2deg((ang2 - ang1) % (2 * np.pi)))
 
     def run_test(self):
-        dirname = f"{PRJ_PATH}/tests/compass_arrow"
+        dirname = f"{PRJ_PATH}/tests/compass_arrows"
         image_filenames = os.listdir(dirname)
         image_filenames = image_filenames[:]
 
@@ -107,14 +107,14 @@ class Direction:
 
 
 if __name__ == "__main__":
-    window = wnd.init_window("Sky2Fly")
+    # window = wnd.init_window("Sky2Fly")
     direction = Direction()
-    # direction.run_test()
+    direction.run_test()
 
-    while True:
-        frame = wnd.read_window_frame(window, grayscale=False)
-
-        print(direction.get_ship_angle(frame))
-
-        if cv2.waitKey(1) & 0xFF == 27:
-            break
+    # while True:
+    #     frame = wnd.read_window_frame(window, grayscale=False)
+    #
+    #     print(direction.get_ship_angle(frame))
+    #
+    #     if cv2.waitKey(1) & 0xFF == 27:
+    #         break

@@ -154,7 +154,7 @@ class Coordinate:
             self.templates.append(self.add_mask(template))
 
     def run_test(self):
-        dirname = f"{PRJ_PATH}/tests/compass_coords_rgb"
+        dirname = f"{PRJ_PATH}/tests/compass_coords"
         image_filenames = os.listdir(dirname)
         images_rgb = [cv2.imread(f"{dirname}/{filename}")[:, :, ::-1] for filename in image_filenames]
 
@@ -197,7 +197,7 @@ class Coordinate:
 
 
 if __name__ == "__main__":
-    window = wnd.init_window("Sky2Fly")
+    # window = wnd.init_window("Sky2Fly")
     coordinate = Coordinate()
 
     coordinate.run_test()
