@@ -8,11 +8,12 @@ import pyautogui
 import utils.window as wnd
 
 
-class Controller:
+class ActionController:
     def __init__(self, window):
         self.window = window
         self.ship_speed = 571
         self.px_per_sec = 0.015
+        self.down_speed_up_per_sec = 1.8
 
     def click_by_angle(self, angle, ship_x=479, ship_y=489, click_type="left"):
         center_radius = 31
@@ -62,7 +63,11 @@ class Controller:
     def autopilot_by_frame_coords(self, x, y, distance=0):
         sleep_time = distance * self.px_per_sec + 2
         print(f"Sleep time: {sleep_time}")
+
         pyautogui.doubleClick(x, y)
+        pyautogui.rightClick(x, y)
+        sleep_time -= self.down_speed_up_per_sec
+
         time.sleep(sleep_time)
         print(f"Wake up")
 
@@ -81,13 +86,9 @@ if __name__ == "__main__":
     window = wnd.init_window("Sky2Fly")
     frame = wnd.read_window_frame(window, grayscale=False)
 
-    controller = Controller(window)
+    controller = ActionController(window)
 
-
-    x, y = controller.angle_to_xy(275)
-    ship_x, ship_y = wnd.get_ship_center(window)
-
-    controller.autopilot_by_frame_coords(500, 800)
+    controller.autopilot_by_frame_coords(250, 359)
 
     # for i in range(370):
     #     if i % 15 == 0:

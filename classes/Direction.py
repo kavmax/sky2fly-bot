@@ -11,8 +11,8 @@ class Direction:
     def __init__(self):
         self.template_masked, self.template_dir = [], 0
         self.template_w, self.template_h = 0, 0
-        self.rot_interval = 5
-        self.delta_err = 10
+        self.rot_interval, self.delta_err = 1, 10
+        self.ship_x, self.ship_y = -1, -1
 
         self.init_template()
 
@@ -30,10 +30,6 @@ class Direction:
 
         image_rgb = cv2.resize(image_rgb, (self.template_h, self.template_w))
         image_masked = hsv_matcher.add_hsv_mask(image_rgb)
-        # image_masked_rgb = cv2.cvtColor(image_masked, cv2.COLOR_GRAY2RGB)
-        # cv2.imshow("image_masked", image_masked)
-        # cv2.imshow("self.template_masked", self.template_masked)
-        # cv2.waitKey(0)
 
         result = hsv_matcher.modified_match_template(image_masked, self.template_masked,
                                                      method="TM_CCOEFF_NORMED",
@@ -47,6 +43,13 @@ class Direction:
             return result[0][1], result[0][3]
 
         return -1, -1
+
+    @staticmethod
+    def get_targ_angle(x_targ, y_targ, x_curr, y_curr):
+        pc, pt = (0, 0), (x_targ - x_curr, y_curr - y_targ)
+        ang1 = np.arctan2(*pc[::-1])
+        ang2 = np.arctan2(*pt[::-1])
+        return int(np.rad2deg((ang2 - ang1) % (2 * np.pi)))
 
     def run_test(self):
         dirname = f"{PRJ_PATH}/tests/compass_arrow"
@@ -110,7 +113,6 @@ if __name__ == "__main__":
 
     while True:
         frame = wnd.read_window_frame(window, grayscale=False)
-        # direction.save_template(frame, "template-0.png")
 
         print(direction.get_ship_angle(frame))
 

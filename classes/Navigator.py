@@ -2,17 +2,16 @@ import math
 import operator
 
 import cv2
+import time
+import pyperclip
 import pyautogui
 import numpy as np
 import utils.window as wnd
-import pyperclip
-import time
-import utils.window as wnd
+from threading import Thread
 from utils.constants import *
-from utils.coordinates import *
 from classes.Coordinate import Coordinate
 from classes.Direction import Direction
-from classes.Controller import Controller
+from classes.ActionController import ActionController
 
 
 class Navigator:
@@ -22,99 +21,96 @@ class Navigator:
         self.coordinate = Coordinate()
         self.direction = Direction()
 
+        self.x_targ, self.y_targ = -1, -1
+        self.x_curr, self.y_curr = -1, -1
+        self.curr_angle, self.targ_angle = -1, -1
+        self.targ_turn_distance = -1
+        self.turn_allowed_error = 15
+
+        self.updater = Thread(target=self.updater, daemon=True)
+        self.updater.start()
+
+    def updater(self):
+        print("Navigator updater started")
+        while True:
+            self.update_variables()
+            time.sleep(0.1)
+            # self.get_info()
+
+    def update_variables(self):
+        frame_rgb = wnd.read_window_frame(self.window, grayscale=False)
+        self.x_curr, self.y_curr = self.coordinate.get_coords(frame_rgb)
+        self.curr_angle, _ = self.direction.get_ship_angle(frame_rgb)
+        self.targ_angle = self.direction.get_targ_angle(self.x_targ, self.y_targ, self.x_curr, self.y_curr)
+        self.targ_turn_distance = self.get_turn_distance()
+
+    def get_info(self):
+        print(f"self.x_curr: {self.x_curr}, self.y_curr: {self.y_curr}\n"
+              f"self.x_targ: {self.x_targ}, self.y_targ: {self.y_targ}\n"
+              f"self.curr_angle: {self.curr_angle}, self.targ_angle: {self.targ_angle}\n"
+              f"self.targ_turn_distance: {self.targ_turn_distance}\n"
+              f"turn_key: {self.choose_turn_position()}")
+
     def leave_base_by_direction(self, direction):
         pyautogui.click(
             self.window.right + COMPASS[direction][1],
             self.window.top + COMPASS[direction][0]
         )
-        self.state = PLAYER_ON_FLY
         print(f"Navigator leave base. State: {self.state}")
 
-    def get_position(self, frame_rgb):
-        start_time = time.time()
-
-        x, y = self.coordinate.get_coords_via_read_frame(frame_rgb)
-        angle = self.direction.get_ship_angle(frame_rgb)[0]
-
-        total_time = time.time() - start_time
-
-        print(f"y:{y}, x:{x}, angle:{angle}, executed in {total_time}")
-
-    def get_target_degrees(self, x_targ, y_targ, frame_rgb=None):
-        if frame_rgb is None:
-            frame_rgb = wnd.read_window_frame(self.window, grayscale=False)
-
-        x_curr, y_curr = self.coordinate.get_coordinates_via_click(self.window)
-        pc, pt = (0, 0), (x_targ - x_curr, y_curr - y_targ)
-        ang1 = np.arctan2(*pc[::-1])
-        ang2 = np.arctan2(*pt[::-1])
-        return int(np.rad2deg((ang2 - ang1) % (2 * np.pi)))
-
-    def choose_turn_position(self, target_angle, ship_angle):
-        d = abs(target_angle-ship_angle)
-        turn_idx = np.argmin([d, 360-d])
-        turn_distance = np.min([d, 360-d])
-
-        if turn_idx == 0:
-            turn_key = "A"
+    def choose_turn_position(self):
+        if self.targ_turn_distance > 0:
+            return "A"
         else:
-            turn_key = "D"
+            return "D"
 
-        return turn_key, turn_distance
+    def get_turn_distance(self):
+        diff = (self.targ_angle - self.curr_angle + 180) % 360 - 180
+        distance = diff + 360 if diff < -180 else diff
+        return distance
 
-    def get_turn_distance(self, target_angle, ship_angle):
-        d = abs(target_angle-ship_angle)
-        return np.min([d, 360-d])
+    def turn_ship_to_target(self):
+        turn_key = self.choose_turn_position()
 
-    def turn_ship_to_target(self, target_angle, ship_angle):
-        turn_key, turn_distance = self.choose_turn_position(target_angle, ship_angle)
-        while turn_distance >= 20:
-            frame_rgb = wnd.read_window_frame(self.window, grayscale=False)
+        while abs(self.targ_turn_distance) >= self.turn_allowed_error:
+            if abs(self.targ_turn_distance) < 90:
+                pyautogui.press("w")
+            else:
+                pyautogui.press("s")
+
             pyautogui.keyDown(turn_key)
-
-            ship_angle, acc = self.direction.get_ship_angle(frame_rgb)
-            _, turn_distance = self.choose_turn_position(target_angle, ship_angle)
         else:
-            print("Directions are equal (+-20 degrees)")
+            print(f"Directions are equal (+-{self.turn_allowed_error} degrees)")
             pyautogui.keyUp(turn_key)
 
-    def go_to(self, x_targ, y_targ):
-        frame_rgb = wnd.read_window_frame(self.window, grayscale=False)
-        controller = Controller(self.window)
+    def go_to_target(self, x_targ, y_targ, allowed_error=0):
+        self.x_targ, self.y_targ = x_targ, y_targ
 
-        # Get angles
-        target_angle = self.get_target_degrees(x_targ, y_targ, frame_rgb)
-        ship_angle, acc = self.direction.get_ship_angle(frame_rgb)
-        print(f"target_angle: {target_angle}, ship_angle: {ship_angle}")
-        # Ship info
-        x_curr, y_curr = self.coordinate.get_coordinates_via_click(self.window)
-        turn_distance = self.get_turn_distance(target_angle, ship_angle)
+        controller = ActionController(self.window)
 
-        while not (x_curr == x_targ and y_curr == y_targ):
-            frame_rgb = wnd.read_window_frame(self.window, grayscale=False)
-            ship_angle, acc = self.direction.get_ship_angle(frame_rgb)
-            target_angle = self.get_target_degrees(x_targ, y_targ, frame_rgb)
-
-            if turn_distance > 20:
-                self.turn_ship_to_target(target_angle, ship_angle)
-
-            frame_rgb = wnd.read_window_frame(self.window, grayscale=False)
-            ship_angle, acc = self.direction.get_ship_angle(frame_rgb)
-            target_angle = self.get_target_degrees(x_targ, y_targ, frame_rgb)
-            turn_distance = self.get_turn_distance(target_angle, ship_angle)
-
-            # Set autoclickD
-            controller.autopilot_by_angle(90, 250)
-
-            # frame_rgb = wnd.read_window_frame(self.window, grayscale=False)
-            x_curr, y_curr = self.coordinate.get_coordinates_via_click(self.window)
-            print(f"Current x:{x_curr}, y:{y_curr}")
+        while not (self.x_curr - allowed_error <= self.x_targ <= self.x_curr + allowed_error and
+                   self.y_curr - allowed_error <= self.y_targ <= self.y_curr + allowed_error):
+            if abs(self.targ_turn_distance) > self.turn_allowed_error:
+                self.turn_ship_to_target()
+                time.sleep(0.1)
+            else:
+                # Set` autoclick
+                controller.autopilot_by_angle(90, 250)
+                print(f"Current x:{self.x_curr}, y:{self.y_curr}")
         else:
-            print(f"I`m here x:{x_curr}, y:{y_curr}")
+            pyautogui.keyUp("w")
+            pyautogui.keyUp("s")
+            print(f"I`m here x:{self.x_curr}, y:{self.y_curr}")
 
 
 if __name__ == "__main__":
     window = wnd.init_window("Sky2Fly")
     navigator = Navigator()
 
-    navigator.go_to(x_targ=69, y_targ=69)
+    # while True:
+    #     time.sleep(1)
+    #     navigator.get_info()
+    #     break
+
+    # navigator.go_to_target(x_targ=17, y_targ=37, allowed_error=2)
+    # navigator.go_to_target(x_targ=88, y_targ=88, allowed_error=2)
