@@ -1,25 +1,40 @@
 import cv2
 import math
 import time
-
 import pyautogui
-
 import utils.window as wnd
 import numpy as np
 from utils.constants import *
-from classes.Navigator import Navigator
+from threading import Thread
 
 
 class MineralCollector:
-    def __init__(self, window):
+    def __init__(self, window, collector_item_key="5"):
         self.window = window
-        self.collector_item_activated_at = None
+        self.collector_item_activated_at = time.time() - 10**2
         self.collector_cooldown = 13
         self.collector_working_time = 10
+        self.collector_item_key = collector_item_key
+        self.thread_working_flag = False
+        self.collector_item_activator_thread = Thread(target=self.collector_item_activator, daemon=True)
+        self.collector_item_activator_thread.start()
+
+    def start_collector_item_activator(self):
+        self.thread_working_flag = True
+
+    def stop_collector_item_activator(self):
+        self.thread_working_flag = False
+
+    def collector_item_activator(self):
+        while True:
+            if self.thread_working_flag:
+                if not self.collector_item_in_cooldown():
+                    self.activate_collector_item()
+            time.sleep(1)
 
     def activate_collector_item(self):
         self.collector_item_activated_at = time.time()
-        pyautogui.press("5")
+        pyautogui.press(self.collector_item_key)
 
     def collector_item_is_working(self):
         delta_time = time.time() - self.collector_item_activated_at
@@ -82,21 +97,29 @@ class MineralCollector:
         cv2.imshow("Minerals", cv2.resize(frame_bgr, (int(h / 4), int(w / 4))))
         cv2.waitKey(1)
 
+
 if __name__ == '__main__':
 
     window = wnd.init_window("Sky2Fly")
     collector = MineralCollector(window)
 
+    time.sleep(4)
+    collector.start_collector_item_activator()
+
     while True:
-        frame_bgr = wnd.read_window_frame(window, grayscale=False)[:, :, ::-1]
-        # frame_bgr = cv2.imread("../tests/minerals/pf_1655305772.png")[:, :, ::-1]
+        print(f"working: {collector.collector_item_is_working()}, cooldown: {collector.collector_item_in_cooldown()}")
+        # collector.stop_collector_item_activator()
 
-        mineral_coords = collector.find_minerals(frame_rgb=frame_bgr[:, :, ::-1])
-
-        if len(mineral_coords):
-            nearest_mineral = collector.find_nearest_mineral(mineral_coords)
-            (n_x, n_y), distance = nearest_mineral[0], nearest_mineral[1]
-
-            collector.show_minerals(mineral_coords, frame_bgr, (n_x, n_y), distance)
-        else:
-            print("No minerals found")
+    # while True:
+    #     frame_bgr = wnd.read_window_frame(window, grayscale=False)[:, :, ::-1]
+    #     # frame_bgr = cv2.imread("../tests/minerals/pf_1655305772.png")[:, :, ::-1]
+    #
+    #     mineral_coords = collector.find_minerals(frame_rgb=frame_bgr[:, :, ::-1])
+    #
+    #     if len(mineral_coords):
+    #         nearest_mineral = collector.find_nearest_mineral(mineral_coords)
+    #         (n_x, n_y), distance = nearest_mineral[0], nearest_mineral[1]
+    #
+    #         collector.show_minerals(mineral_coords, frame_bgr, (n_x, n_y), distance)
+    #     else:
+    #         print("No minerals found")
